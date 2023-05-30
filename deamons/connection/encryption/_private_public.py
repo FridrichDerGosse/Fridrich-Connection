@@ -28,7 +28,7 @@ class PrivatePublicCryption(CryptionMethod):
 
     __own_private_key: rsa.RSAPrivateKey
     __own_public_key: rsa.RSAPublicKey
-    __foreign_public_key: rsa.RSAPublicKey
+    __foreign_public_key: rsa.RSAPublicKey | None
     __public_str: str
 
     def __init__(self) -> None:
@@ -36,16 +36,20 @@ class PrivatePublicCryption(CryptionMethod):
         Create public-private cryption model
         """
         self.new_key()
+        self.__foreign_public_key = None
 
     def encrypt(self, message: str) -> bytes:
-        return self.__foreign_public_key.encrypt(
-            message.encode(),
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
+        if self.__foreign_public_key:
+            return self.__foreign_public_key.encrypt(
+                message.encode(),
+                padding.OAEP(
+                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                    algorithm=hashes.SHA256(),
+                    label=None
+                )
             )
-        )
+        else:
+            return message.encode()
 
     def decrypt(self, message: bytes) -> str:
         return self.__own_private_key.decrypt(

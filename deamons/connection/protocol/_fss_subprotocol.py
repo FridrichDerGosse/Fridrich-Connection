@@ -1,5 +1,5 @@
 """
-deamons/connection/protocol/_sub_protocol.py
+deamons/connection/protocol/_fss_subprotocol.py
 
 Project: Fridrich-Connection
 Created: 26.05.2023
@@ -15,9 +15,9 @@ Author: Lukas Krahbichler
 #                     Code                       #
 ##################################################
 
-class SubscriptionProtocol:
+class FSSP:
     """
-    Special protocol for subscriptions
+    Fridrich-Subscription-Service-Protocol
     """
 
     __id_range: range
@@ -25,7 +25,7 @@ class SubscriptionProtocol:
 
     def __init__(
             self,
-            id_range: range = range(1, 1000)
+            id_range: range = range(1000, 1999)
     ) -> None:
         """
         Create subscription protocol

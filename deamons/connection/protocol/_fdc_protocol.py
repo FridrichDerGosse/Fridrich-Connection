@@ -1,5 +1,5 @@
 """
-deamons/connection/protocol/_protocol.py
+deamons/connection/protocol/_fdc_protocol.py
 
 Project: Fridrich-Connection
 Created: 25.05.2023
@@ -10,39 +10,30 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from typing import TypedDict, Literal
+from typing import Literal
 from datetime import datetime
 from json import loads, dumps
 
+from ._protocol_types import BulkDict, MessageDict, KINDS
+from ._fcm_subprotocol import FCMP
 
 ##################################################
 #                     Code                       #
 ##################################################
-class MessageDict(TypedDict):
-    """
-    A MessageDict is always sent in a BulkDict
-    """
-    id: int
-    time: float
-    data: list[dict[str | int | float | bool | None, any]]
-
-
-class BulkDict(MessageDict):
-    """
-    This is the dict that is really being sent
-    """
-    kind: Literal["send", "resp", "sub"]
 
 
 class MessageToLongError(Exception):
     ...
 
 
-class Protocol:
+class FDCP:
     """
-    Protocol for send, response, bulks and subscriptions.
-    For the details of subscriptions there is an extra protocol
+    Fridrich-Default-Communication-Protocol
+    Protocol for send and response bulks
+
+    Comes with FCMP by default
     """
+    __max_bytes: int
     __max_size: int
     __even: bool
 
@@ -55,11 +46,13 @@ class Protocol:
     __send_bulk: list[MessageDict]
     __resp_bulk: list[MessageDict]
 
+    __fcmp: FCMP
+
     def __init__(
             self,
             max_size: int = 4,
             even: bool | None = False,
-            id_range: range = range(1001, 2000)
+            id_range: range = range(100, 999)
     ) -> None:
         """
         Create protocol
@@ -75,25 +68,43 @@ class Protocol:
         self.__send_bulk = []
         self.__resp_bulk = []
 
+        self.__fcmp = FCMP(self)
+
+    @property
+    def fcmp(self) -> FCMP:
+        """
+        Return FCM-Protocol
+        :return: Protocol instance
+        """
+        return self.__fcmp
+
     @property
     def max_size(self) -> int:
         """
-        :return: The number of bytes that are used to communicate the message length
+        :return: The number of bytes that are used to communicate
         """
         return self.__max_size
+
+    @property
+    def max_bytes(self) -> int:
+        """
+        :return: The number of bytes that are used to communicate the message length
+        """
+        return self.__max_bytes
 
     @max_size.setter
     def max_size(self, value: int) -> None:
         """
         Set max message size
-        :param value: Number of bites to communicate max_size
+        :param value: Number of bytes to communicate max_size
         """
+        self.__max_bytes = value
         self.__max_size = 2 ** (value * 8)
 
     def _encapsulate(
             self,
             message: dict[str | int | float | bool | None, any] | list[MessageDict],
-            kind: Literal["single_send", "single_resp", "send", "resp", "sub"],
+            kind: KINDS | Literal["single_send", "single_resp"],
             _id: int | None = None
     ) -> None | str:
         """
@@ -201,14 +212,20 @@ class Protocol:
             if restart:
                 self.response_start()
 
-    def subscription(self, message: dict[str | int | float | bool | None, any], sub_id: int) -> str:
+    def sub_protocol(
+            self,
+            message: dict[str | int | float | bool | None, any],
+            _id: int,
+            kind: KINDS
+    ) -> str:
         """
-        Encapsulation for subscriptions
-        :param message: Data of the subscription message
-        :param sub_id: The id of the subscription
+        Encapsulation for sub-protocols
+        :param message: Data of the message
+        :param _id: The ID to use
+        :param kind: Protocol type
         :return: The encapsulated message string
         """
-        return self._encapsulate(message, kind="sub", _id=sub_id)
+        return self._encapsulate(message, kind=kind, _id=_id)
 
     def decapsulate(self, messages: bytes) -> BulkDict:
         """

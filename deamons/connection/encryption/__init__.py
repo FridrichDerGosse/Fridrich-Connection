@@ -7,3 +7,4 @@ Author: Lukas Krahbichler
 """
 
 from ._cryption import CryptionService
+from ._cryption_method import CryptionMethod

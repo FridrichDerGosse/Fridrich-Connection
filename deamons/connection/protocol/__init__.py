@@ -6,5 +6,5 @@ Created: 25.05.2023
 Author: Lukas Krahbichler
 """
 
-from ._sub_protocol import SubscriptionProtocol
-from ._protocol import Protocol, BulkDict
+from ._fdc_protocol import FDCP, BulkDict
+from ._fss_subprotocol import FSSP
