@@ -18,20 +18,30 @@ from typing import TypedDict, Literal
 ##################################################
 
 # Defines the different protocols that can be sent
-KINDS = Literal["send", "resp", "fssp", "fcmp"]
+KINDS = Literal["data", "sub", "con"]
+DIRECTIONS = Literal["request", "response"]
+DATAUNIT = dict[str | int | float | bool | None, any]
 
 
-class MessageDict(TypedDict):
+class _Dict(TypedDict):
+    """
+    Shared information of MessageDict and BulkDict
+    """
+    time: float
+
+
+class MessageDict(_Dict):
     """
     A MessageDict is always sent in a BulkDict
     """
     id: int
-    time: float
-    data: list[dict[str | int | float | bool | None, any]]
+    data: DATAUNIT
 
 
-class BulkDict(MessageDict):
+class BulkDict(_Dict):
     """
     This is the dict that is really being sent
     """
+    data: list[MessageDict]
     kind: KINDS
+    direction: DIRECTIONS

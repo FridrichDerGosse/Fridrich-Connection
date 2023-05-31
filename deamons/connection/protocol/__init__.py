@@ -5,6 +5,5 @@ Project: Fridrich-Connection
 Created: 25.05.2023
 Author: Lukas Krahbichler
 """
-
-from ._fdc_protocol import FDCP, BulkDict
-from ._fss_subprotocol import FSSP
+from ._types import MessageDict, BulkDict, KINDS, DIRECTIONS, DATAUNIT
+from ._protocol_interface import ProtocolInterface

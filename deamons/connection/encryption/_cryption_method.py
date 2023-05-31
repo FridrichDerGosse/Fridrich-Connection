@@ -19,7 +19,7 @@ class CryptionMethod:
     """
     Every cryptionmethod should inherit from this and overwrite all functions
     """
-    def encrypt(self, message: str) -> str:
+    def encrypt(self, message: bytes) -> bytes:
         """
         Encrypt messages
         :param message: Raw message
@@ -27,7 +27,7 @@ class CryptionMethod:
         """
         ...
 
-    def decrypt(self, message: str) -> str:
+    def decrypt(self, message: bytes) -> bytes:
         """
         Decrypte messages
         :param message: Encrypted message

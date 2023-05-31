@@ -10,13 +10,13 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Literal
 from datetime import datetime, timedelta
 from time import sleep
 import socket
 
-from ..protocol import BulkDict, FDCP
+from ..protocol import BulkDict, Protocol
 from ..encryption import CryptionService, CryptionMethod
 
 
@@ -29,18 +29,16 @@ class BaseConnection:
     This represents a connection between server and client
     """
     __socket: socket.socket
-    __recv_callback: Callable[[BulkDict], Any]
     __timeout: int
     __start_time: datetime
     __lease_time: datetime
 
     _thread_pool: ThreadPoolExecutor
 
-    _fdcp: FDCP
+    _fdcp: Protocol
     _cryption: CryptionMethod
 
     _send_data: list[str]
-    __send_futures: dict[int, Future]
 
     __STATES = Literal["init", "open", "closed", "all"]
     __state: __STATES | Literal["all"]
@@ -49,14 +47,15 @@ class BaseConnection:
     def __init__(
             self,
             conn: socket.socket,
-            recv_callback: Callable[[BulkDict], Any],
+            request_callback: Protocol.REQUEST_CALLBACK_TYPE,
             even_ids: bool | None = False,
-            timeout: int = 10
+            timeout: int = 10,
+            packet_size: int = 32,
     ) -> None:
         """
         Create connection
         :param conn: Socket
-        :param recv_callback: Callback when something is reveived
+        :param request_callback: Callback to get information for requests
         :param even_ids: Whether the even or the odd numbers should be taken for the ids
         :param timeout: Connection leasetime if no response on ping (min 2)
         """
@@ -64,9 +63,10 @@ class BaseConnection:
             timeout = 2
         self.__timeout = timeout
 
+        self.__packet_size = packet_size
+
         self.__socket = conn
         self.__socket.settimeout(0.1)
-        self.__recv_callback = recv_callback
 
         self.__start_time = datetime.now()
         self.__lease_time = self.__start_time + timedelta(seconds=self.__timeout)
@@ -74,9 +74,8 @@ class BaseConnection:
         self.__state = "init"
 
         self._send_data = []
-        self.__send_futures = {}
 
-        self._fdcp = FDCP(even=even_ids)
+        self._fdcp = Protocol(request_callback=request_callback)
         self._cryption = CryptionService.new_cryption()
 
         self._thread_pool = ThreadPoolExecutor(max_workers=2)
@@ -88,27 +87,54 @@ class BaseConnection:
                 if datetime.now() > self.__lease_time - timedelta(seconds=2):
                     self._send_data.append(self._fdcp.fcmp.ping())
 
+            # Sending
             for send in self._send_data:
-                self._cryption.encrypt(send)
+                size_send: bytes = len(send).to_bytes(length=self._fdcp.max_bytes, byteorder="big")
 
-            # RECV Decrypt
+                self.__socket.send(self._cryption.encrypt(size_send + send.encode("UTF-8")))
+
+            # Receiving
+            encrypted_buffer: bytes = bytes()
+            while True:
+                recv: bytes = self.__socket.recv(__bufsize=self.__packet_size)
+                if not recv:
+                    break
+                encrypted_buffer += recv
+
+            message_buffer: bytes = self._cryption.decrypt(encrypted_buffer)
+            recv_messages: list[BulkDict] = []
+
+            while message_buffer != b'':
+                size_recv: int = int.from_bytes(bytes=message_buffer[:self._fdcp.max_bytes], byteorder="big")
+
+                message_bytes = message_buffer[self._fdcp.max_bytes:self._fdcp.max_bytes+size_recv]
+                recv_messages.append(self._fdcp.decapsulate(message_bytes))
+
+                message_buffer = message_buffer[self._fdcp.max_bytes+size_recv:]
+
+            for message in recv_messages:
+                match message["kind"]:
+                    case "send":
+                        self._fdcp.process_request(message)
+
+                    case "resp":
+                        self._fdcp.process_response(message)
+
+                    case "fssp":
+                        ...
+                    case "fcmp":
+                        ...
 
             sleep(0.05)
 
-    def send(self, message: str, _id: int) -> Future:
+    def send(self, message: str) -> None:
         """
         Send a message
         :param message: Raw string message
-        :param _id: ID of the conversation
-        :return: Future for the response
         """
         if self._state == "open":
-            future: Future = Future()
-
-            self.__send_futures[_id] = future
             self._send_data.append(message)
 
-            return future
         raise ConnectionError("Connection is not in state 'open'.")
 
     @property
