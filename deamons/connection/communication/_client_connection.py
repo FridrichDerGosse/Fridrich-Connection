@@ -35,7 +35,7 @@ class ClientConnection(BaseConnection):
 
         super().__init__(conn=sock, recv_callback=self.__subscription_check)
 
-        self._send_data.append(self._fdcp.fcmp.key(self._cryption.get_key()))
+        self._send_data.append(self._protocol.fcmp.key(self._cryption.get_key()))
 
         self._state = 10
 

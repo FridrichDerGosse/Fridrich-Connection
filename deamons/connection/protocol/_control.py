@@ -10,13 +10,12 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from typing import TYPE_CHECKING, TypedDict, Any, Callable
+from typing import TypedDict, Any, Callable
 
 from ._types import BulkDict, MessageDict
 from ._protocol import Protocol
 
-if TYPE_CHECKING:
-    from ..encryption import CRYPTION_METHODS
+from ..encryption import CRYPTION_METHODS
 
 
 ##################################################
@@ -38,7 +37,7 @@ class ControlProtocol:
     SET_KEY_CALLBACK_TYPE = Callable[[str], Any]
     PING_CALLBACK_TYPE = Callable[[], Any]
     MAX_BYTES_CALLBACK_TYPE = Callable[[int], Any]
-    CRYPTION_CALLBACK_TYPE = Callable[[str], Any]
+    CRYPTION_CALLBACK_TYPE = Callable[[str], tuple[NEW_KEY_CALLBACK_TYPE, SET_KEY_CALLBACK_TYPE]]
 
     __new_key_callback: NEW_KEY_CALLBACK_TYPE
     __set_key_callback: SET_KEY_CALLBACK_TYPE
@@ -62,7 +61,8 @@ class ControlProtocol:
         :param set_key_callback: Callback when a new key is received
         :param ping_callback: Callback when ping response is received
         :param max_bytes_callback: Callback to set new max bytes
-        :param cryption_callback: Callback to set new encryption
+        :param cryption_callback: Callback to set new encryption,
+        Should return new ney_key_callback, set_key_callback
         """
         self.__protocol = Protocol("con", id_range)
         self.__new_key_callback = new_key_callback
@@ -103,7 +103,7 @@ class ControlProtocol:
         :param id_: ID of the conversation
         :return: Confirm message
         """
-        return self.__response({"type": "ping", "value": self.__new_key_callback()}, id_)
+        return self.__response({"type": "key", "value": self.__new_key_callback()}, id_)
 
     def request_ping(self) -> str:
         """
@@ -161,10 +161,12 @@ class ControlProtocol:
             case "ping":
                 return self._response_ping(id_)
             case "key":
+                self.__set_key_callback(submessage["data"]["value"])
                 return self._response_key_exchange(id_)
             case "max_bytes":
                 self.__max_bytes_callback(submessage["data"]["value"])
             case "cryption":
-                self.__cryption_callback(submessage["data"]["value"])
+                self.__new_key_callback, self.__set_key_callback = \
+                    self.__cryption_callback(submessage["data"]["value"])
 
         return None

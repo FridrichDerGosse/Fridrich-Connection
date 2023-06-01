@@ -11,13 +11,12 @@ Author: Lukas Krahbichler
 ##################################################
 
 from concurrent.futures import Future
-from typing import Callable, TYPE_CHECKING
+from json import loads
+from typing import Callable
 
-from ._protocol import Protocol
 from ._types import BulkDict, DATAUNIT
-
-if TYPE_CHECKING:
-    from ._cache import Cache
+from ._protocol import Protocol
+from ._cache import Cache
 
 
 ##################################################
@@ -65,11 +64,11 @@ class DataProtocol(Protocol):
             value = self.__cache.get(message)
             if value:
                 future.set_result(value)
-            return future
+                return future
 
         super().request_add(message)
 
-        self.__send_futures[self._id_count] = future
+        self.__send_futures[self._id_count-1] = future
         return future
 
     def process_response(self, message: BulkDict) -> None:
@@ -78,7 +77,7 @@ class DataProtocol(Protocol):
         :param message: Response message
         """
         for submessage in message["data"]:
-            self.__send_futures[submessage["id"]].set_result(submessage["data"])
+            self.__send_futures[submessage["id"]].set_result(loads(submessage["data"]))
             self.__send_futures.pop(submessage["id"])
 
     def process_request(self, message: BulkDict) -> str:

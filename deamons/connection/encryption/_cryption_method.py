@@ -47,8 +47,8 @@ class CryptionMethod:
         """
         ...
 
-    def new_key(self) -> None:
+    def new_key(self) -> str:
         """
-        Generate a new key
+        Generate a new key and return public key
         """
         ...

@@ -13,11 +13,10 @@ Author: Lukas Krahbichler
 from typing import Callable, Any, TypedDict, Literal, Type, TYPE_CHECKING
 from concurrent.futures import ThreadPoolExecutor
 
-from ._protocol import Protocol
-from ._types import BulkDict, DATAUNIT
 
-if TYPE_CHECKING:
-    from ._cache import Cache
+from ._types import BulkDict, DATAUNIT
+from ._protocol import Protocol
+from ._cache import Cache
 
 
 ##################################################
@@ -57,8 +56,8 @@ class SubscriptionProtocol:
             self,
             id_range: range,
             thread_pool: ThreadPoolExecutor,
-            add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE,
-            delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE,
+            add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE | None,
+            delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE | None,
             cache: Cache | None = None
     ) -> None:
         """
@@ -158,6 +157,8 @@ class SubscriptionProtocol:
         submessage = message["data"][0]
         match submessage["data"]["action"]:
             case "add":
-                self.__add_related_sub_callback(submessage["id"], submessage["data"]["value"])
+                if self.__add_related_sub_callback is not None:
+                    self.__add_related_sub_callback(submessage["id"], submessage["data"]["value"])
             case "delete":
-                self.__delete_related_sub_callback(submessage["data"]["value"])
+                if self.__delete_related_sub_callback is not None:
+                    self.__delete_related_sub_callback(submessage["data"]["value"])

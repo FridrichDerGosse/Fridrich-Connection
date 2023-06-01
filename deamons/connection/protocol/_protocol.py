@@ -51,7 +51,7 @@ class Protocol:
         """
         self.__kind = kind
 
-        self.__id_range = id_range
+        self._id_range = id_range
         self._id_count = id_range.start
 
         self.__bulks = {}
@@ -78,7 +78,7 @@ class Protocol:
             self,
             message: DATAUNIT | list[MessageDict],
             direction: DIRECTIONS,
-            single: bool | None = True,
+            single: bool = True,
             id_: int | None = None
     ) -> None | str:
         """
@@ -106,7 +106,7 @@ class Protocol:
             additional_information["kind"] = self.__kind
 
         # Increase id
-        if not id_:
+        if not id_ and single:
             self._id_count += 1
             if self._id_count >= self._id_range.stop:
                 self._id_count = self._id_range.start

@@ -10,7 +10,7 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from typing import TYPE_CHECKING
+from concurrent.futures import ThreadPoolExecutor
 from json import loads
 
 from ._subscription import SubscriptionProtocol
@@ -19,8 +19,6 @@ from ._data import DataProtocol
 from ._types import BulkDict
 from ._cache import Cache
 
-if TYPE_CHECKING:
-    from concurrent.futures import ThreadPoolExecutor
 
 ##################################################
 #                     Code                       #
@@ -36,6 +34,10 @@ class ProtocolInterface:
     __control: ControlProtocol
     __subscription: SubscriptionProtocol
 
+    REQUEST_CALLBACK_TYPE = DataProtocol.REQUEST_CALLBACK_TYPE
+    ADD_RELATED_SUB_CALLBACK_TYPE = SubscriptionProtocol.ADD_RELATED_SUB_CALLBACK_TYPE | None
+    DELETE_RELATED_SUB_CALLBACK_TYPE = SubscriptionProtocol.DELETE_RELATED_SUB_CALLBACK_TYPE | None
+
     def __init__(
             self,
             data_callback: DataProtocol.REQUEST_CALLBACK_TYPE,
@@ -45,8 +47,8 @@ class ProtocolInterface:
             max_bytes_callback: ControlProtocol.MAX_BYTES_CALLBACK_TYPE,
             cryption_callback: ControlProtocol.CRYPTION_CALLBACK_TYPE,
             thread_pool: ThreadPoolExecutor,
-            add_related_sub_callback: SubscriptionProtocol.ADD_RELATED_SUB_CALLBACK_TYPE,
-            delete_related_sub_callback: SubscriptionProtocol.DELETE_RELATED_SUB_CALLBACK_TYPE,
+            add_related_sub_callback: SubscriptionProtocol.ADD_RELATED_SUB_CALLBACK_TYPE | None = None,
+            delete_related_sub_callback: SubscriptionProtocol.DELETE_RELATED_SUB_CALLBACK_TYPE | None = None,
             max_bytes: int = 4
     ) -> None:
         """
