@@ -42,8 +42,9 @@ class BaseConnection:
     _cryption: CryptionMethod
 
     _send_data: list[str]
+    __send_key: str | None
 
-    __STATES = Literal["init", "open", "closed", "all"]
+    __STATES = Literal["init", "open", "key_exchange", "closed"]
     __state: __STATES | Literal["all"]
     __state_callbacks: dict[int, tuple[__STATES, Callable[[], Any]]]
 
@@ -80,6 +81,7 @@ class BaseConnection:
         self.__state_callbacks = {}
 
         self._send_data = []
+        self.__send_key = None
 
         self._thread_pool = ThreadPoolExecutor(max_workers=2)
         self._cryption = CryptionService.new_cryption()
@@ -97,6 +99,11 @@ class BaseConnection:
         )
 
         self._thread_pool.submit(self.__loop)
+
+    def key_exchange_confirm(self, key: str) -> None:
+        if self.__state == "key_exchange":
+            self._cryption.set_key(key)
+
 
     def __ping_confirm(self) -> None:
         """
@@ -136,11 +143,18 @@ class BaseConnection:
                     return
 
             # Sending
-            for send in self._send_data:
+            to_send: list[str] = []
+            if self.__state == "key_exchange":
+                to_send = [self.__send_key]
+                self.__send_key = None
+            else:
+                to_send = self._send_data
+                self._send_data = []
+
+            for send in to_send:
                 print("SEND", send)
                 size_send: bytes = len(send).to_bytes(length=Protocol.max_bytes, byteorder="big")
                 self.__socket.send(self._cryption.encrypt(size_send + send.encode("UTF-8")))
-            self._send_data = []
 
             # Receiving
             encrypted_buffer: bytes = bytes()
@@ -194,6 +208,7 @@ class BaseConnection:
         """
         Close connection
         """
+        self.__state = "closed"
         self._thread_pool.shutdown(wait=False, cancel_futures=True)
         self.__socket.close()
 
@@ -207,6 +222,14 @@ class BaseConnection:
             return
 
         raise ConnectionError("Connection is not in state 'open'.")
+
+    def send_key_exchange(self, message: str) -> None:
+        """
+        Send key exchange message
+        :param message: Key exchange message
+        """
+        self.__send_key = message
+        self.__state = "key_exchange"
 
     @property
     def state(self) -> Literal["init", "open", "closed"]:

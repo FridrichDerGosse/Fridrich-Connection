@@ -50,7 +50,7 @@ def get_socket_pair(
 
 
 class BaseConnectionModified(BaseConnection):
-    def set_state(self, state: Literal["init", "open", "closed"]) -> None:
+    def set_state(self, state: Literal["init", "open", "closed", "key_exchange"]) -> None:
         self._set_state(state)
 
     @property
@@ -105,7 +105,8 @@ class BaseConnectionTest(unittest.TestCase):
         """
         Test encrypted data protocol traffic
         """
-        self.conn_client.send(self.conn_client.protocol.control.request_key_exchange())
+        self.conn_client.send_key_exchange(self.conn_client.protocol.control.request_key_exchange())
+        self.conn_client.send_key_exchange(self.conn_client.protocol.control.request_key_exchange())
 
         for i in range(50):
             sleep(0.1)
