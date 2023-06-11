@@ -35,12 +35,14 @@ class ControlProtocol:
 
     NEW_KEY_CALLBACK_TYPE = Callable[[], str]
     SET_KEY_CALLBACK_TYPE = Callable[[str], Any]
+    KEY_EXCHANGE_TYPE = Callable[[], Any]
     PING_CALLBACK_TYPE = Callable[[], Any]
     MAX_BYTES_CALLBACK_TYPE = Callable[[int], Any]
     CRYPTION_CALLBACK_TYPE = Callable[[str], tuple[NEW_KEY_CALLBACK_TYPE, SET_KEY_CALLBACK_TYPE]]
 
     __new_key_callback: NEW_KEY_CALLBACK_TYPE
     __set_key_callback: SET_KEY_CALLBACK_TYPE
+    __key_exchange_callback: KEY_EXCHANGE_TYPE
     __ping_callback: PING_CALLBACK_TYPE
     __max_bytes_callback: MAX_BYTES_CALLBACK_TYPE
     __cryption_callback: CRYPTION_CALLBACK_TYPE
@@ -50,6 +52,7 @@ class ControlProtocol:
             id_range: range,
             new_key_callback: NEW_KEY_CALLBACK_TYPE,
             set_key_callback: SET_KEY_CALLBACK_TYPE,
+            key_exchange_callback: KEY_EXCHANGE_TYPE,
             ping_callback: PING_CALLBACK_TYPE,
             max_bytes_callback: MAX_BYTES_CALLBACK_TYPE,
             cryption_callback: CRYPTION_CALLBACK_TYPE
@@ -59,6 +62,7 @@ class ControlProtocol:
         :param id_range: ID range to use for this subprotocol
         :param new_key_callback: Callback to generate a new key and get it
         :param set_key_callback: Callback when a new key is received
+        :param key_exchange_callback: Callback when key exchange was successful
         :param ping_callback: Callback when ping response is received
         :param max_bytes_callback: Callback to set new max bytes
         :param cryption_callback: Callback to set new encryption,
@@ -66,8 +70,9 @@ class ControlProtocol:
         """
         self.__protocol = Protocol("con", id_range)
         self.__new_key_callback = new_key_callback
-        self.__ping_callback = ping_callback
         self.__set_key_callback = set_key_callback
+        self.__key_exchange_callback = key_exchange_callback
+        self.__ping_callback = ping_callback
         self.__max_bytes_callback = max_bytes_callback
         self.__cryption_callback = cryption_callback
 
@@ -147,6 +152,7 @@ class ControlProtocol:
                 self.__ping_callback()
             case "key":
                 self.__set_key_callback(submessage["data"]["value"])
+                self.__key_exchange_callback()
 
     def process_request(self, message: BulkDict) -> str | None:
         """

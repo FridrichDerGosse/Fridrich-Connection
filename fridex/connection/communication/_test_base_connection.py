@@ -50,7 +50,7 @@ def get_socket_pair(
 
 
 class BaseConnectionModified(BaseConnection):
-    def set_state(self, state: Literal["init", "open", "closed", "key_exchange"]) -> None:
+    def set_state(self, state: Literal["init", "open", "closed"]) -> None:
         self._set_state(state)
 
     @property
@@ -84,7 +84,6 @@ class BaseConnectionTest(unittest.TestCase):
         """
         Test basic unencrypted data traffic
         """
-
         f_client: list[tuple[Future, int]] = []
         f_server: list[tuple[Future, int]] = []
 
@@ -105,10 +104,10 @@ class BaseConnectionTest(unittest.TestCase):
         """
         Test encrypted data protocol traffic
         """
-        self.conn_client.send_key_exchange(self.conn_client.protocol.control.request_key_exchange())
-        self.conn_client.send_key_exchange(self.conn_client.protocol.control.request_key_exchange())
+        self.conn_client.send_key_exchange()
+        self.conn_client.send_key_exchange()
 
-        for i in range(50):
+        for i in range(100):
             sleep(0.1)
 
     def tearDown(self) -> None:

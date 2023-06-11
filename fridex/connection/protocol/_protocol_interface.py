@@ -43,6 +43,7 @@ class ProtocolInterface:
             data_callback: DataProtocol.REQUEST_CALLBACK_TYPE,
             new_key_callback: ControlProtocol.NEW_KEY_CALLBACK_TYPE,
             set_key_callback: ControlProtocol.SET_KEY_CALLBACK_TYPE,
+            key_exchange_callback: ControlProtocol.KEY_EXCHANGE_TYPE,
             ping_callback: ControlProtocol.PING_CALLBACK_TYPE,
             max_bytes_callback: ControlProtocol.MAX_BYTES_CALLBACK_TYPE,
             cryption_callback: ControlProtocol.CRYPTION_CALLBACK_TYPE,
@@ -56,6 +57,7 @@ class ProtocolInterface:
         :param data_callback: Callback to get information for requests
         :param new_key_callback: Callback to generate a new key and get it
         :param set_key_callback: Callback when a new key is received
+        :param key_exchange_callback: Callback when key exchange was successful
         :param ping_callback: Callback when ping response is received
         :param max_bytes_callback: Callback to set new max bytes
         :param cryption_callback: Callback to set new encryption
@@ -69,7 +71,7 @@ class ProtocolInterface:
         self.__cache = Cache()
 
         self.__data = DataProtocol(range(100, 999), request_callback=data_callback, cache=self.__cache)
-        self.__control = ControlProtocol(range(0, 99), new_key_callback, set_key_callback,
+        self.__control = ControlProtocol(range(0, 99), new_key_callback, set_key_callback, key_exchange_callback,
                                          ping_callback, max_bytes_callback, cryption_callback)
         self.__subscription = SubscriptionProtocol(range(1000, 1999), thread_pool,
                                                    add_related_sub_callback, delete_related_sub_callback,

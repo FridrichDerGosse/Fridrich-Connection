@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 from time import sleep
 import socket
 import select
-import sys
 
 from ..protocol import BulkDict, ProtocolInterface, Protocol
 from ..encryption import CryptionService, CryptionMethod
@@ -42,9 +41,9 @@ class BaseConnection:
     _cryption: CryptionMethod
 
     _send_data: list[str]
-    __send_key: str | None
+    __send_key: int
 
-    __STATES = Literal["init", "open", "key_exchange", "closed"]
+    __STATES = Literal["init", "open", "key_send", "key_wait", "closed"]
     __state: __STATES | Literal["all"]
     __state_callbacks: dict[int, tuple[__STATES, Callable[[], Any]]]
 
@@ -55,12 +54,12 @@ class BaseConnection:
             add_sub_callback: ProtocolInterface.ADD_RELATED_SUB_CALLBACK_TYPE | None = None,
             del_sub_callback: ProtocolInterface.DELETE_RELATED_SUB_CALLBACK_TYPE | None = None,
             timeout: int = 10,
-            packet_size: int = 32,
+            packet_size: int = 1,
     ) -> None:
         """
         Create connection
         :param conn: Socket
-        :param request_callback: Callback to get information for requests
+        :param request_callback: Callback to get information for data requests
         :param add_sub_callback: Callback when an add subscription request comes in
         :param del_sub_callback: Callback when a delete subscription request comes in
         :param timeout: Connection leasetime if no response on ping
@@ -81,7 +80,7 @@ class BaseConnection:
         self.__state_callbacks = {}
 
         self._send_data = []
-        self.__send_key = None
+        self.__send_key = 0
 
         self._thread_pool = ThreadPoolExecutor(max_workers=2)
         self._cryption = CryptionService.new_cryption()
@@ -90,6 +89,7 @@ class BaseConnection:
             data_callback=request_callback,
             new_key_callback=self._cryption.new_key,
             set_key_callback=self._cryption.set_key,
+            key_exchange_callback=self.key_exchange,
             ping_callback=self.__ping_confirm,
             max_bytes_callback=Protocol.set_max_bytes,
             cryption_callback=self.__update_encryption,
@@ -100,10 +100,11 @@ class BaseConnection:
 
         self._thread_pool.submit(self.__loop)
 
-    def key_exchange_confirm(self, key: str) -> None:
-        if self.__state == "key_exchange":
-            self._cryption.set_key(key)
-
+    def key_exchange(self) -> None:
+        if self.__send_key > 0:
+            self._set_state("key_send")
+        else:
+            self._set_state("open")
 
     def __ping_confirm(self) -> None:
         """
@@ -127,6 +128,7 @@ class BaseConnection:
         pinged: bool = False
 
         while True:
+
             if self.__state == "open":
                 # Request ping
                 if not pinged and datetime.now() > self.__lease_time:
@@ -144,10 +146,12 @@ class BaseConnection:
 
             # Sending
             to_send: list[str] = []
-            if self.__state == "key_exchange":
-                to_send = [self.__send_key]
-                self.__send_key = None
-            else:
+            if self.__state == "key_send":
+                to_send = [self._protocol.control.request_key_exchange()]
+                self.__send_key -= 1
+                self._set_state("key_wait")
+
+            elif self.__state != "key_wait":
                 to_send = self._send_data
                 self._send_data = []
 
@@ -208,7 +212,7 @@ class BaseConnection:
         """
         Close connection
         """
-        self.__state = "closed"
+        self._set_state("closed")
         self._thread_pool.shutdown(wait=False, cancel_futures=True)
         self.__socket.close()
 
@@ -223,13 +227,13 @@ class BaseConnection:
 
         raise ConnectionError("Connection is not in state 'open'.")
 
-    def send_key_exchange(self, message: str) -> None:
+    def send_key_exchange(self) -> None:
         """
         Send key exchange message
-        :param message: Key exchange message
         """
-        self.__send_key = message
-        self.__state = "key_exchange"
+        if self.__state == "open":
+            self._set_state("key_send")
+        self.__send_key += 1
 
     @property
     def state(self) -> Literal["init", "open", "closed"]:
