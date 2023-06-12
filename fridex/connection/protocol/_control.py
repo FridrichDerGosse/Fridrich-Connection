@@ -38,7 +38,7 @@ class ControlProtocol:
     KEY_EXCHANGE_TYPE = Callable[[], Any]
     PING_CALLBACK_TYPE = Callable[[], Any]
     MAX_BYTES_CALLBACK_TYPE = Callable[[int], Any]
-    CRYPTION_CALLBACK_TYPE = Callable[[str], tuple[NEW_KEY_CALLBACK_TYPE, SET_KEY_CALLBACK_TYPE]]
+    CRYPTION_CALLBACK_TYPE = Callable[[str, str], tuple[NEW_KEY_CALLBACK_TYPE, SET_KEY_CALLBACK_TYPE]]
 
     __new_key_callback: NEW_KEY_CALLBACK_TYPE
     __set_key_callback: SET_KEY_CALLBACK_TYPE
@@ -65,7 +65,7 @@ class ControlProtocol:
         :param key_exchange_callback: Callback when key exchange was successful
         :param ping_callback: Callback when ping response is received
         :param max_bytes_callback: Callback to set new max bytes
-        :param cryption_callback: Callback to set new encryption,
+        :param cryption_callback: Callback to set new encryption
         Should return new ney_key_callback, set_key_callback
         """
         self.__protocol = Protocol("con", id_range)
@@ -131,15 +131,25 @@ class ControlProtocol:
         :param num: Number of bytes
         :return: String to send
         """
+        self.__protocol.set_max_bytes(num)
         return self.__request({"type": "max_bytes", "value": num})
 
-    def request_crpytion(self, new_cryption: CRYPTION_METHODS) -> str:
+    def request_crpytion(self, new_cryption: CRYPTION_METHODS, new_key: str | None = None) -> str:
         """
         Request to change the encryption
         :param new_cryption: New encryption to use
+        :param new_key: Key for the new encryption
         :return: String to send
         """
-        return self.__request({"type": "cryption", "value": new_cryption})
+        return self.__request({"type": "cryption", "value": {"name": new_cryption, "key": new_key}})
+
+    def _response_cryption(self, id_: int) -> str:
+        """
+        Response to cryption change with a key
+        :param id_: ID of the conversation
+        :return: String to send
+        """
+        return self.__response({"type": "cryption", "value": self.__new_key_callback()}, id_)
 
     def process_response(self, message: BulkDict) -> None:
         """
@@ -153,6 +163,8 @@ class ControlProtocol:
             case "key":
                 self.__set_key_callback(submessage["data"]["value"])
                 self.__key_exchange_callback()
+            case "cryption":
+                self.__set_key_callback(submessage["data"]["value"])
 
     def process_request(self, message: BulkDict) -> str | None:
         """
@@ -173,6 +185,8 @@ class ControlProtocol:
                 self.__max_bytes_callback(submessage["data"]["value"])
             case "cryption":
                 self.__new_key_callback, self.__set_key_callback = \
-                    self.__cryption_callback(submessage["data"]["value"])
+                    self.__cryption_callback(submessage["data"]["value"]["name"],
+                                             submessage["data"]["value"]["key"])
+                return self._response_cryption(id_)
 
         return None

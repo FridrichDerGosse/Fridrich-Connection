@@ -14,13 +14,13 @@ from typing import Literal
 
 from ._private_public import PrivatePublicCryption
 from ._cryption_method import CryptionMethod
-
+from ._fernet import FernetCryption
 
 ##################################################
 #                     Code                       #
 ##################################################
 
-CRYPTION_METHODS = Literal["private_public"]
+CRYPTION_METHODS = Literal["private_public", "fernet"]
 
 
 class CryptionService:
@@ -33,3 +33,5 @@ class CryptionService:
         match method:
             case "private_public":
                 return PrivatePublicCryption()
+            case "fernet":
+                return FernetCryption()

@@ -58,14 +58,15 @@ class Protocol:
         for direction in get_args(DIRECTIONS):
             self.__bulks[direction] = []
 
-    @classmethod
-    def set_max_bytes(cls, value: int) -> None:
+    @staticmethod
+    def set_max_bytes(value: int) -> None:
         """
         Set the bytes to communicate the maximum length for all protocols
         :param value: New value to set
         """
-        cls.max_bytes = value
-        cls.max_size = 2 ** (value * 8)
+        print("SET MAX_BYTES", value)
+        Protocol.max_bytes = value
+        Protocol.max_size = 2 ** (value * 8)
 
     @property
     def id_count(self) -> int:
@@ -118,7 +119,7 @@ class Protocol:
             message_str: str = dumps(additional_information)
 
             if len(message_str) > self.__class__.max_size:
-                raise MessageToLongError(f"With a size of {message_str} the message is to long!")
+                raise MessageToLongError(f"With a size of {len(message_str)} the message is to long!")
 
             return message_str
         return None

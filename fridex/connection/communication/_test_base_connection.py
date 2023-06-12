@@ -12,13 +12,14 @@ Author: Lukas Krahbichler
 
 
 from concurrent.futures import Future
+from time import sleep, time
 from typing import Literal
 from json import dumps
-from time import sleep
 import unittest
 import socket
 
 from ._base_connection import BaseConnection, ProtocolInterface
+from ..protocol import MessageToLongError
 
 
 ##################################################
@@ -80,6 +81,18 @@ class BaseConnectionTest(unittest.TestCase):
         self.conn_server.set_state("open")
         self.conn_client.set_state("open")
 
+    def hold_connection(self, duration: int | None = 5) -> None:
+        """
+        Hold the connection and then check if it's still open
+        :param duration: Duration to hold in seconds
+        """
+        start = time()
+        while time() < start + duration:
+            sleep(0.1)
+
+        self.assertEqual(self.conn_client.state, "open")
+        self.assertEqual(self.conn_server.state, "open")
+
     def test_unencrypted_data(self) -> None:
         """
         Test basic unencrypted data traffic
@@ -100,6 +113,8 @@ class BaseConnectionTest(unittest.TestCase):
         for f, num in f_client + f_server:
             self.assertEqual(f.result()["test"], num)
 
+        self.hold_connection(0)
+
     def test_encrypted_data(self) -> None:
         """
         Test encrypted data protocol traffic
@@ -107,8 +122,27 @@ class BaseConnectionTest(unittest.TestCase):
         self.conn_client.send_key_exchange()
         self.conn_client.send_key_exchange()
 
-        for i in range(100):
-            sleep(0.1)
+        self.hold_connection()
+
+    def test_maxbytes(self) -> None:
+        """
+        Test max_bytes change
+        """
+        for num in [10, 0]:
+            if num == 10:
+                req = self.conn_client.protocol.control.request_max_bytes(num)
+            else:
+                self.assertRaises(MessageToLongError, lambda: self.conn_client.protocol.control.request_max_bytes(num))
+                break
+
+            self.conn_client.send(req)
+
+            self.hold_connection()
+
+            self.assertEqual(self.conn_client.protocol.data.max_bytes, num)
+            self.assertEqual(self.conn_server.protocol.data.max_bytes, num)
+
+            self.hold_connection(2)
 
     def tearDown(self) -> None:
         """
