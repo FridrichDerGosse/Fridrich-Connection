@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from json import loads
 
 from ._subscription import SubscriptionProtocol
+from ._communication import CommunicationProtocol
 from ._control import ControlProtocol
 from ._data import DataProtocol
 from ._types import BulkDict
@@ -32,6 +33,7 @@ class ProtocolInterface:
     __cache: Cache
     __data: DataProtocol
     __control: ControlProtocol
+    __communication: CommunicationProtocol
     __subscription: SubscriptionProtocol
 
     REQUEST_CALLBACK_TYPE = DataProtocol.REQUEST_CALLBACK_TYPE
@@ -41,12 +43,15 @@ class ProtocolInterface:
     def __init__(
             self,
             data_callback: DataProtocol.REQUEST_CALLBACK_TYPE,
-            new_key_callback: ControlProtocol.NEW_KEY_CALLBACK_TYPE,
-            set_key_callback: ControlProtocol.SET_KEY_CALLBACK_TYPE,
-            key_exchange_callback: ControlProtocol.KEY_EXCHANGE_TYPE,
+            new_key_callback: CommunicationProtocol.NEW_KEY_CALLBACK_TYPE,
+            set_key_callback: CommunicationProtocol.SET_KEY_CALLBACK_TYPE,
+            control_callback: CommunicationProtocol.CONTROL_CALLBACK,
             ping_callback: ControlProtocol.PING_CALLBACK_TYPE,
-            max_bytes_callback: ControlProtocol.MAX_BYTES_CALLBACK_TYPE,
-            cryption_callback: ControlProtocol.CRYPTION_CALLBACK_TYPE,
+            max_bytes_callback: CommunicationProtocol.MAX_BYTES_CALLBACK_TYPE,
+            cryption_req_callback: CommunicationProtocol.CRYPTION_REQ_CALLBACK_TYPE,
+            cryption_res_callback: CommunicationProtocol.CRYPTION_RES_CALLBACK_TYPE,
+            pause_connection_callback: CommunicationProtocol.PAUSE_CONNECTION_CALLBACK_TYPE,
+            resume_connection_callback: CommunicationProtocol.RESUME_CONNECTION_CALLBACK_TYPE,
             thread_pool: ThreadPoolExecutor,
             add_related_sub_callback: SubscriptionProtocol.ADD_RELATED_SUB_CALLBACK_TYPE | None = None,
             delete_related_sub_callback: SubscriptionProtocol.DELETE_RELATED_SUB_CALLBACK_TYPE | None = None,
@@ -57,10 +62,13 @@ class ProtocolInterface:
         :param data_callback: Callback to get information for requests
         :param new_key_callback: Callback to generate a new key and get it
         :param set_key_callback: Callback when a new key is received
-        :param key_exchange_callback: Callback when key exchange was successful
+        :param control_callback: Callback when control response is received that requires pausing the connection
         :param ping_callback: Callback when ping response is received
         :param max_bytes_callback: Callback to set new max bytes
-        :param cryption_callback: Callback to set new encryption
+        :param cryption_req_callback: Callback to set new encryption with key.
+        :param cryption_res_callback: Callback to confirm cryption change and set key
+        :param pause_connection_callback: Callback to pause connection if requested
+        :param resume_connection_callback: Callback to resume connection if requested
         :param thread_pool: ThreadPool to execute callbacks
         :param add_related_sub_callback: Callback when an add subscription request comes in
         :param delete_related_sub_callback: Callback when a delete subscription request comes in
@@ -70,10 +78,13 @@ class ProtocolInterface:
 
         self.__cache = Cache()
 
-        self.__data = DataProtocol(range(100, 999), request_callback=data_callback, cache=self.__cache)
-        self.__control = ControlProtocol(range(0, 99), new_key_callback, set_key_callback, key_exchange_callback,
-                                         ping_callback, max_bytes_callback, cryption_callback)
-        self.__subscription = SubscriptionProtocol(range(1000, 1999), thread_pool,
+        self.__data = DataProtocol(range(0, 999), request_callback=data_callback, cache=self.__cache)
+        self.__control = ControlProtocol(range(1000, 1999), ping_callback)
+        self.__communication = CommunicationProtocol(range(2000, 2999), new_key_callback, set_key_callback,
+                                                     control_callback, max_bytes_callback,
+                                                     cryption_req_callback, cryption_res_callback,
+                                                     pause_connection_callback, resume_connection_callback)
+        self.__subscription = SubscriptionProtocol(range(3000, 3999), thread_pool,
                                                    add_related_sub_callback, delete_related_sub_callback,
                                                    cache=self.__cache)
 
@@ -98,6 +109,13 @@ class ProtocolInterface:
         :return: ControlProtocol instance
         """
         return self.__control
+
+    @property
+    def communication(self) -> CommunicationProtocol:
+        """
+        :return: CommunicationProtocol instance
+        """
+        return self.__communication
 
     @property
     def subscription(self) -> SubscriptionProtocol:

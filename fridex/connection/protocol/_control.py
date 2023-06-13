@@ -1,8 +1,8 @@
 """
-deamons/connection/protocol/_control.py
+fridex/connection/protocol/_connection.py
 
 Project: Fridrich-Connection
-Created: 30.05.2023
+Created: 13.06.2023
 Author: Lukas Krahbichler
 """
 
@@ -10,12 +10,10 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from typing import TypedDict, Any, Callable
+from typing import TypedDict, Literal, Callable, Any
 
 from ._types import BulkDict, MessageDict
 from ._protocol import Protocol
-
-from ..encryption import CRYPTION_METHODS
 
 
 ##################################################
@@ -23,8 +21,7 @@ from ..encryption import CRYPTION_METHODS
 ##################################################
 
 class ControlData(TypedDict):
-    type: str
-    value: Any
+    type: Literal["ping", "alive"]
 
 
 class ControlProtocol:
@@ -33,48 +30,22 @@ class ControlProtocol:
     """
     __protocol: Protocol
 
-    NEW_KEY_CALLBACK_TYPE = Callable[[], str]
-    SET_KEY_CALLBACK_TYPE = Callable[[str], Any]
-    KEY_EXCHANGE_TYPE = Callable[[], Any]
     PING_CALLBACK_TYPE = Callable[[], Any]
-    MAX_BYTES_CALLBACK_TYPE = Callable[[int], Any]
-    CRYPTION_CALLBACK_TYPE = Callable[[str, str], tuple[NEW_KEY_CALLBACK_TYPE, SET_KEY_CALLBACK_TYPE]]
 
-    __new_key_callback: NEW_KEY_CALLBACK_TYPE
-    __set_key_callback: SET_KEY_CALLBACK_TYPE
-    __key_exchange_callback: KEY_EXCHANGE_TYPE
     __ping_callback: PING_CALLBACK_TYPE
-    __max_bytes_callback: MAX_BYTES_CALLBACK_TYPE
-    __cryption_callback: CRYPTION_CALLBACK_TYPE
 
     def __init__(
             self,
             id_range: range,
-            new_key_callback: NEW_KEY_CALLBACK_TYPE,
-            set_key_callback: SET_KEY_CALLBACK_TYPE,
-            key_exchange_callback: KEY_EXCHANGE_TYPE,
-            ping_callback: PING_CALLBACK_TYPE,
-            max_bytes_callback: MAX_BYTES_CALLBACK_TYPE,
-            cryption_callback: CRYPTION_CALLBACK_TYPE
+            ping_callback: PING_CALLBACK_TYPE
     ) -> None:
         """
         Create control protocol
         :param id_range: ID range to use for this subprotocol
-        :param new_key_callback: Callback to generate a new key and get it
-        :param set_key_callback: Callback when a new key is received
-        :param key_exchange_callback: Callback when key exchange was successful
         :param ping_callback: Callback when ping response is received
-        :param max_bytes_callback: Callback to set new max bytes
-        :param cryption_callback: Callback to set new encryption
-        Should return new ney_key_callback, set_key_callback
         """
         self.__protocol = Protocol("con", id_range)
-        self.__new_key_callback = new_key_callback
-        self.__set_key_callback = set_key_callback
-        self.__key_exchange_callback = key_exchange_callback
         self.__ping_callback = ping_callback
-        self.__max_bytes_callback = max_bytes_callback
-        self.__cryption_callback = cryption_callback
 
     def __response(self, data: ControlData, id_: int) -> str:
         """
@@ -95,27 +66,12 @@ class ControlProtocol:
         self.__protocol.request_add(data)
         return self.__protocol.request_get()
 
-    def request_key_exchange(self) -> str:
-        """
-        Request exchanging encryption keys
-        :return: Raw string to send
-        """
-        return self.__request({"type": "key", "value": self.__new_key_callback()})
-
-    def _response_key_exchange(self, id_: int) -> str:
-        """
-        Also send back a new key
-        :param id_: ID of the conversation
-        :return: Confirm message
-        """
-        return self.__response({"type": "key", "value": self.__new_key_callback()}, id_)
-
     def request_ping(self) -> str:
         """
         Request ping eachother
         :return: Ping string to send
         """
-        return self.__request({"type": "ping", "value": None})
+        return self.__request({"type": "ping"})
 
     def _response_ping(self, id_: int) -> str:
         """
@@ -123,33 +79,14 @@ class ControlProtocol:
         :param id_: ID of the conversation
         :return: Confirm message
         """
-        return self.__response({"type": "ping", "value": None}, id_)
+        return self.__response({"type": "ping"}, id_)
 
-    def request_max_bytes(self, num: int) -> str:
+    def request_alive(self) -> str:
         """
-        Redefine number of bytes to communicate length
-        :param num: Number of bytes
+        Provide alive message
         :return: String to send
         """
-        self.__protocol.set_max_bytes(num)
-        return self.__request({"type": "max_bytes", "value": num})
-
-    def request_crpytion(self, new_cryption: CRYPTION_METHODS, new_key: str | None = None) -> str:
-        """
-        Request to change the encryption
-        :param new_cryption: New encryption to use
-        :param new_key: Key for the new encryption
-        :return: String to send
-        """
-        return self.__request({"type": "cryption", "value": {"name": new_cryption, "key": new_key}})
-
-    def _response_cryption(self, id_: int) -> str:
-        """
-        Response to cryption change with a key
-        :param id_: ID of the conversation
-        :return: String to send
-        """
-        return self.__response({"type": "cryption", "value": self.__new_key_callback()}, id_)
+        return self.__request({"type": "alive"})
 
     def process_response(self, message: BulkDict) -> None:
         """
@@ -160,11 +97,6 @@ class ControlProtocol:
         match submessage["data"]["type"]:
             case "ping":
                 self.__ping_callback()
-            case "key":
-                self.__set_key_callback(submessage["data"]["value"])
-                self.__key_exchange_callback()
-            case "cryption":
-                self.__set_key_callback(submessage["data"]["value"])
 
     def process_request(self, message: BulkDict) -> str | None:
         """
@@ -178,15 +110,5 @@ class ControlProtocol:
         match submessage["data"]["type"]:
             case "ping":
                 return self._response_ping(id_)
-            case "key":
-                self.__set_key_callback(submessage["data"]["value"])
-                return self._response_key_exchange(id_)
-            case "max_bytes":
-                self.__max_bytes_callback(submessage["data"]["value"])
-            case "cryption":
-                self.__new_key_callback, self.__set_key_callback = \
-                    self.__cryption_callback(submessage["data"]["value"]["name"],
-                                             submessage["data"]["value"]["key"])
-                return self._response_cryption(id_)
-
-        return None
+            case "alive":
+                self.__ping_callback()

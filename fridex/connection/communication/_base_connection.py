@@ -13,13 +13,13 @@ Author: Lukas Krahbichler
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Literal
 from datetime import datetime, timedelta
-from time import sleep
+from time import sleep, time
 import socket
 import select
 
 from ..protocol import BulkDict, ProtocolInterface, Protocol
-from ..encryption import CryptionService, CryptionMethod
-from ..protocol import ControlProtocol
+from ..encryption import CryptionService, CryptionMethod, CRYPTION_METHODS
+from ..protocol import CommunicationProtocol
 
 
 ##################################################
@@ -36,14 +36,16 @@ class BaseConnection:
     __lease_time: datetime
 
     _thread_pool: ThreadPoolExecutor
-
     _protocol: ProtocolInterface
+
     _cryption: CryptionMethod
+    _new_cryption: CryptionMethod | None
 
     _send_data: list[str]
-    __send_key: int
+    _send_communication: list[Literal["key"] | CRYPTION_METHODS]
+    _respond_communication: str | None
 
-    __STATES = Literal["init", "open", "key_send", "key_wait", "closed"]
+    __STATES = Literal["open", "paused", "prewait", "waiting", "afterwait", "closed"]
     __state: __STATES | Literal["all"]
     __state_callbacks: dict[int, tuple[__STATES, Callable[[], Any]]]
 
@@ -76,35 +78,69 @@ class BaseConnection:
         self.__start_time = datetime.now()
         self.__lease_time = self.__start_time + timedelta(seconds=self.__timeout)
 
-        self.__state = "init"
+        self.__state = "open"
         self.__state_callbacks = {}
 
         self._send_data = []
-        self.__send_key = 0
+        self._send_communication = []
+        self._respond_communication = None
 
         self._thread_pool = ThreadPoolExecutor(max_workers=2)
         self._cryption = CryptionService.new_cryption()
+        self._new_cryption = None
 
         self._protocol = ProtocolInterface(
             data_callback=request_callback,
             new_key_callback=self._cryption.new_key,
             set_key_callback=self._cryption.set_key,
-            key_exchange_callback=self.key_exchange,
+            control_callback=self.__confirm_control,
             ping_callback=self.__ping_confirm,
             max_bytes_callback=Protocol.set_max_bytes,
-            cryption_callback=self.__update_encryption,
+            cryption_req_callback=self.__cryption_request,
+            cryption_res_callback=self.__cryption_confirm,
+            pause_connection_callback=lambda: self._set_state("paused"),
+            resume_connection_callback=lambda: self._set_state("open"),
             thread_pool=self._thread_pool,
             add_related_sub_callback=add_sub_callback,
-            delete_related_sub_callback=del_sub_callback
+            delete_related_sub_callback=del_sub_callback,
+            sub_send_callback=self.send
         )
 
         self._thread_pool.submit(self.__loop)
 
-    def key_exchange(self) -> None:
-        if self.__send_key > 0:
-            self._set_state("key_send")
-        else:
+    def __confirm_control(self) -> None:
+        """
+        Confirm control message that requires pausing the connection
+        """
+        if self.__state == "afterwait":
             self._set_state("open")
+        else:
+            self._set_state("prewait")
+
+    def __cryption_request(
+            self,
+            encryption: CRYPTION_METHODS,
+            key: str
+    ) -> tuple[CommunicationProtocol.NEW_KEY_CALLBACK_TYPE, CommunicationProtocol.SET_KEY_CALLBACK_TYPE]:
+        """
+        Callback when cryption exchange is requested
+        :param encryption: New encryption type string
+        :param key: New key
+        :return: New cryption callbacks for ControlProtocol
+        """
+        self._cryption = CryptionService.new_cryption(encryption)
+        self._cryption.set_key(key)
+        return self._cryption.new_key, self._cryption.set_key
+
+    def __cryption_confirm(self, key: str) -> tuple[CommunicationProtocol.NEW_KEY_CALLBACK_TYPE, CommunicationProtocol.SET_KEY_CALLBACK_TYPE]:
+        """
+        Callback when cryption exchange was successful
+        :param key: New key
+        :return: New cryption callbacks for ControlProtocol
+        """
+        self._cryption.set_key(key)
+
+        return self._cryption.new_key, self._cryption.set_key
 
     def __ping_confirm(self) -> None:
         """
@@ -112,53 +148,73 @@ class BaseConnection:
         """
         self.__lease_time = datetime.now() + timedelta(seconds=self.__timeout)
 
-    def __update_encryption(
-            self,
-            encryption: Literal["private_public"]
-    ) -> tuple[ControlProtocol.NEW_KEY_CALLBACK_TYPE, ControlProtocol.SET_KEY_CALLBACK_TYPE]:
-        """
-        Callback when a new cryption should be set
-        :param encryption: Encryption type string
-        :return: New cryption callbacks for ControlProtocol
-        """
-        self._cryption = CryptionService.new_cryption(encryption)
-        return self._cryption.new_key, self._cryption.set_key
-
     def __loop(self) -> None:
-        pinged: bool = False
+        next_alive: datetime = datetime.now()
 
         while True:
-
             if self.__state == "open":
                 # Request ping
-                if not pinged and datetime.now() > self.__lease_time:
-                    self._send_data.append(self._protocol.control.request_ping())
-                    pinged = True
-
-                if pinged and self.__lease_time > datetime.now():
-                    pinged = False
+                if datetime.now() > next_alive:
+                    self._send_data.append(self._protocol.control.request_alive())
+                    next_alive = datetime.now() + timedelta(seconds=self.__timeout)
 
                 # Close connection if leased
-                if datetime.now() > self.__lease_time + timedelta(seconds=2) and pinged:
+                if datetime.now() > self.__lease_time + timedelta(seconds=2):
                     print("CLOSE")
                     self.__socket.close()
                     return
 
             # Sending
             to_send: list[str] = []
-            if self.__state == "key_send":
-                to_send = [self._protocol.control.request_key_exchange()]
-                self.__send_key -= 1
-                self._set_state("key_wait")
 
-            elif self.__state != "key_wait":
-                to_send = self._send_data
-                self._send_data = []
+            # Pause other side
+            if self.__state == "open" and self._send_communication:
+                self._set_state("waiting")
+                to_send = [self._protocol.communication.request_pause()]
 
+            if self.__state == "prewait" and not self._send_communication:
+                self._set_state("afterwait")
+                to_send = [self._protocol.communication.request_resume()]
+
+            # Choose what to send
+            match self.__state:
+                case "prewait":
+                    send = self._send_communication.pop(0)
+                    match send:
+                        case "key":
+                            to_send = [self._protocol.communication.request_key_exchange()]
+
+                        case "private_public" | "fernet":
+                            self._new_cryption = CryptionService.new_cryption(send)
+                            to_send = [
+                                self._protocol.communication.request_crpytion(
+                                    send,
+                                    self._new_cryption.new_key()
+                                )
+                            ]
+                    self._set_state("waiting")
+
+                case "waiting" | "afterwait":
+                    ...
+
+                case "paused" | "open":
+                    if self._respond_communication:
+                        to_send.append(self._respond_communication)
+                        self._respond_communication = None
+
+                    if self.__state == "open":
+                        to_send += self._send_data.copy()
+                        self._send_data = []
+
+            # Sending
             for send in to_send:
                 print("SEND", send)
                 size_send: bytes = len(send).to_bytes(length=Protocol.max_bytes, byteorder="big")
                 self.__socket.send(self._cryption.encrypt(size_send + send.encode("UTF-8")))
+
+            if self._new_cryption:
+                self._cryption = self._new_cryption
+                self._new_cryption = None
 
             # Receiving
             encrypted_buffer: bytes = bytes()
@@ -172,6 +228,8 @@ class BaseConnection:
                 else:
                     break
 
+            # Work out inividual messages
+            t1 = time()
             message_buffer: bytes = self._cryption.decrypt(encrypted_buffer)
             recv_messages: list[BulkDict] = []
 
@@ -184,6 +242,7 @@ class BaseConnection:
 
                 message_buffer = message_buffer[Protocol.max_bytes + size_recv:]
 
+            # Process received messages
             for message in recv_messages:
                 match message["direction"]:
                     case "request":
@@ -192,6 +251,8 @@ class BaseConnection:
                                 self._send_data.append(self._protocol.data.process_request(message))
                             case "sub":
                                 self._protocol.subscription.process_request(message)
+                            case "com":
+                                self._respond_communication = self._protocol.communication.process_request(message)
                             case "con":
                                 con_res = self._protocol.control.process_request(message)
                                 if con_res:
@@ -205,6 +266,8 @@ class BaseConnection:
                                 self._protocol.subscription.process_response(message)
                             case "con":
                                 self._protocol.control.process_response(message)
+                            case "com":
+                                self._protocol.communication.process_response(message)
 
             sleep(0.05)
 
@@ -231,9 +294,13 @@ class BaseConnection:
         """
         Send key exchange message
         """
-        if self.__state == "open":
-            self._set_state("key_send")
-        self.__send_key += 1
+        self._send_communication.append("key")
+
+    def send_cryption_change(self, cryption: CRYPTION_METHODS) -> None:
+        """
+        Send cryption change message
+        """
+        self._send_communication.append(cryption)
 
     @property
     def state(self) -> Literal["init", "open", "closed"]:
@@ -247,6 +314,7 @@ class BaseConnection:
         Set current state and go through callbacks
         :param value: Value to set to
         """
+        print("SET", value)
         self.__state = value
 
         for cb_id, (state, callback) in self.__state_callbacks.items():
@@ -254,7 +322,7 @@ class BaseConnection:
                 callback()
 
         if self.__state == "open":
-            self.__lease_time = datetime.now() + timedelta(seconds=self.__timeout)
+            self.__lease_time = datetime.now() + timedelta(seconds=self.__timeout+1)
 
     def join_state(self, state: __STATES, _time_delta: float | None = 0.1) -> None:
         """

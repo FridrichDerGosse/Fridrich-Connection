@@ -130,9 +130,9 @@ class BaseConnectionTest(unittest.TestCase):
         """
         for num in [10, 0]:
             if num == 10:
-                req = self.conn_client.protocol.control.request_max_bytes(num)
+                req = self.conn_client.protocol.communication.request_max_bytes(num)
             else:
-                self.assertRaises(MessageToLongError, lambda: self.conn_client.protocol.control.request_max_bytes(num))
+                self.assertRaises(MessageToLongError, lambda: self.conn_client.protocol.communication.request_max_bytes(num))
                 break
 
             self.conn_client.send(req)
@@ -143,6 +143,14 @@ class BaseConnectionTest(unittest.TestCase):
             self.assertEqual(self.conn_server.protocol.data.max_bytes, num)
 
             self.hold_connection(2)
+
+    def test_cryption(self) -> None:
+        """
+        Test cryption change
+        """
+        self.conn_client.send_cryption_change("fernet")
+
+        self.hold_connection()
 
     def tearDown(self) -> None:
         """

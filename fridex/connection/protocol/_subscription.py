@@ -48,9 +48,11 @@ class SubscriptionProtocol:
 
     ADD_RELATED_SUB_CALLBACK_TYPE = Callable[[int, DATAUNIT], Any]
     DELETE_RELATED_SUB_CALLBACK_TYPE = Callable[[int], Any]
+    SEND_SUB_CALLBACK_TYPE = Callable[[str], Any]
 
     __add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE
     __delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE
+    __send_sub_callback: SEND_SUB_CALLBACK_TYPE
 
     def __init__(
             self,
@@ -58,6 +60,7 @@ class SubscriptionProtocol:
             thread_pool: ThreadPoolExecutor,
             add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE | None,
             delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE | None,
+            send_sub_callback: SEND_SUB_CALLBACK_TYPE,
             cache: Cache | None = None
     ) -> None:
         """
@@ -66,6 +69,7 @@ class SubscriptionProtocol:
         :param thread_pool: ThreadPool to execute callbacks
         :param add_related_sub_callback: Callback when an add subscription request comes in
         :param delete_related_sub_callback: Callback when a delete subscription request comes in
+        :param send_sub_callback: Callback to send subscription data
         :param cache: Optional cache
         """
         self.__protocol = Protocol("sub", id_range)
@@ -73,20 +77,21 @@ class SubscriptionProtocol:
         self.__thread_pool = thread_pool
         self.__add_related_sub_callback = add_related_sub_callback
         self.__delete_related_sub_callback = delete_related_sub_callback
+        self.__send_sub_callback = send_sub_callback
         self.__cache = cache
 
     def __response(
             self,
             data: DATAUNIT,
-            inner_id: int
+            id_: int
     ) -> str:
         """
         General response encapsulation
         :param data: Response dictonary
-        :param inner_id: ID of the conversation
+        :param id_: ID of the conversation
         :return: Raw string to send
         """
-        self.__protocol.response_add(data, inner_id)
+        self.__protocol.response_add(data, id_)
         return self.__protocol.response_get()
 
     def __request(self, data: SubscriptionRequest) -> str:
@@ -101,7 +106,7 @@ class SubscriptionProtocol:
     def add_subscription(
             self,
             callback: CALLBACK_TYPE,
-            request_dict: dict[str | int | float | bool | None, any]
+            request_dict: DATAUNIT
     ) -> tuple[int, str]:
         """
         Add a new subscription
@@ -125,7 +130,7 @@ class SubscriptionProtocol:
         self.__subscriptions.pop(subscription_id)
         return self.__request({"action": "delete", "value": subscription_id})
 
-    def response_subscription(
+    def _response_subscription(
             self,
             id_: int,
             value: dict[str | int | float | bool | None, any]
@@ -137,6 +142,16 @@ class SubscriptionProtocol:
         :return: Response string to send
         """
         return self.__response(value, id_)
+
+    def provide_data(self, req_dict: DATAUNIT, value: DATAUNIT) -> None:
+        """
+        Check if data is needed in a subscription
+        :param req_dict: Same dictonary as a normal request to use
+        :param value: New value
+        """
+        for sub in self.__subscriptions:
+            if self.__subscriptions[sub]["req_dict"] == req_dict:
+                self.__send_sub_callback(self._response_subscription(sub, value))
 
     def process_response(self, message: BulkDict) -> None:
         """

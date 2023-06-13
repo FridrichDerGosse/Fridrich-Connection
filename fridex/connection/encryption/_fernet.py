@@ -44,21 +44,22 @@ class FernetCryption(CryptionMethod):
         return message
 
     def decrypt(self, message: bytes) -> bytes:
-        if self.__own_cryption:
+        if self.__own_cryption and message != b'':
             return self.__own_cryption.decrypt(message)
+
         return message
 
     def get_key(self) -> str:
         if not self.__own_key:
             self.new_key()
-        return self.__own_key.decode()
+        return self.__own_key.decode("UTF-8")
 
     def set_key(self, key: str) -> None:
-        self.__foreign_key = key.encode()
+        self.__foreign_key = key.encode("UTF-8")
         self.__foreign_cryption = Fernet(self.__foreign_key)
 
     def new_key(self) -> str:
         self.__own_key = Fernet.generate_key()
         self.__own_cryption = Fernet(self.__own_key)
-        return self.__own_key.decode()
+        return self.__own_key.decode("UTF-8")
 

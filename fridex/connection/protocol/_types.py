@@ -18,7 +18,7 @@ from typing import TypedDict, Literal
 ##################################################
 
 # Defines the different protocols that can be sent
-KINDS = Literal["data", "sub", "con"]
+KINDS = Literal["data", "sub", "con", "com"]
 DIRECTIONS = Literal["request", "response"]
 DATAUNIT = dict[str | int | float | bool | None, any]
 

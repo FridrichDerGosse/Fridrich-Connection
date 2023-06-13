@@ -6,4 +6,6 @@ Created: 23.05.2023
 Author: Lukas Krahbichler
 """
 
+from .communication import *
 from .encryption import *
+from .protocol import *
