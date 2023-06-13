@@ -7,4 +7,5 @@ Author: Lukas Krahbichler
 """
 
 from ._client_connection import ClientConnection
+from ._server_connection import ServerConnection
 from ._client_handler import ClientHandler

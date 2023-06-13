@@ -88,7 +88,7 @@ class Protocol:
         :param single: Whether it's a single message that should be added to the queue or the whole queue request
         :param id_: When no new ID should be used (when direction is response)
         :return: Depends on single
-        :raises MessageToLongError: If message is to long to communicate length
+        :raises MessageToLongError: If message is too long to communicate length
         """
         # Base encapsulation
         additional_information: MessageDict | BulkDict = {

@@ -7,4 +7,6 @@ Author: Lukas Krahbichler
 """
 
 from ._cryption import CryptionService, CRYPTION_METHODS
+from ._private_public import PrivatePublicCryption
 from ._cryption_method import CryptionMethod
+from ._fernet import FernetCryption

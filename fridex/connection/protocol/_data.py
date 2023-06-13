@@ -69,7 +69,7 @@ class DataProtocol(Protocol):
         if self.__cache:
             value = self.__cache.get(message)
             if value:
-                future.set_result(value)
+                future.set_result(self.__rework_callback(value))
                 return future
 
         super().request_add(message)

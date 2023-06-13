@@ -1,5 +1,5 @@
 """
-fridex/connection/communication/_communication_test.py
+fridex/connection/communication/_test_communication.py
 
 Project: Fridrich-Connection
 Created: 13.06.2023

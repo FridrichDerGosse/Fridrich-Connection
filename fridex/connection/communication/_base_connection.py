@@ -13,7 +13,7 @@ Author: Lukas Krahbichler
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Any, Literal
 from datetime import datetime, timedelta
-from time import sleep, time
+from time import sleep
 import socket
 import select
 
@@ -230,7 +230,6 @@ class BaseConnection:
                     break
 
             # Work out inividual messages
-            t1 = time()
             message_buffer: bytes = self._cryption.decrypt(encrypted_buffer)
             recv_messages: list[BulkDict] = []
 

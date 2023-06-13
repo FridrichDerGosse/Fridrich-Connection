@@ -10,7 +10,7 @@ Author: Lukas Krahbichler
 #                    Imports                     #
 ##################################################
 
-from typing import Callable, Any, TypedDict, Literal, Type, TYPE_CHECKING
+from typing import Callable, Any, TypedDict, Literal, Type
 from concurrent.futures import ThreadPoolExecutor
 
 
