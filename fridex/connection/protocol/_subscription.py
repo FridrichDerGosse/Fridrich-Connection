@@ -50,9 +50,9 @@ class SubscriptionProtocol:
     DELETE_RELATED_SUB_CALLBACK_TYPE = Callable[[int], Any]
     SEND_SUB_CALLBACK_TYPE = Callable[[str], Any]
 
-    __add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE
-    __delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE
-    __send_sub_callback: SEND_SUB_CALLBACK_TYPE
+    __add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE | None
+    __delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE | None
+    __send_sub_callback: SEND_SUB_CALLBACK_TYPE | None
 
     def __init__(
             self,
@@ -60,7 +60,7 @@ class SubscriptionProtocol:
             thread_pool: ThreadPoolExecutor,
             add_related_sub_callback: ADD_RELATED_SUB_CALLBACK_TYPE | None,
             delete_related_sub_callback: DELETE_RELATED_SUB_CALLBACK_TYPE | None,
-            send_sub_callback: SEND_SUB_CALLBACK_TYPE,
+            send_sub_callback: SEND_SUB_CALLBACK_TYPE | None,
             cache: Cache | None = None
     ) -> None:
         """

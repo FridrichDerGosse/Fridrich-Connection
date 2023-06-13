@@ -64,7 +64,6 @@ class Protocol:
         Set the bytes to communicate the maximum length for all protocols
         :param value: New value to set
         """
-        print("SET MAX_BYTES", value)
         Protocol.max_bytes = value
         Protocol.max_size = 2 ** (value * 8)
 

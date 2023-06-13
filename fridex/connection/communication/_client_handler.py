@@ -14,8 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 import socket
 
+from ..protocol import ProtocolInterface, DATAUNIT
 from ._server_connection import ServerConnection
-from ..protocol import ProtocolInterface
 
 
 ##################################################
@@ -29,12 +29,14 @@ class ClientHandler(socket.socket):
     __clients: list[ServerConnection]
 
     __request_callback: ProtocolInterface.REQUEST_CALLBACK_TYPE
+    __rework_callback: ProtocolInterface.REWORK_CALLBACK_TYPE
     __add_sub_callback: ProtocolInterface.ADD_RELATED_SUB_CALLBACK_TYPE
     __del_sub_callback: ProtocolInterface.DELETE_RELATED_SUB_CALLBACK_TYPE
 
     def __init__(
             self,
             request_callback: ProtocolInterface.REQUEST_CALLBACK_TYPE,
+            rework_callback: ProtocolInterface.REWORK_CALLBACK_TYPE,
             add_sub_callback: ProtocolInterface.ADD_RELATED_SUB_CALLBACK_TYPE,
             del_sub_callback: ProtocolInterface.DELETE_RELATED_SUB_CALLBACK_TYPE,
             port: int | None = 4205,
@@ -51,6 +53,7 @@ class ClientHandler(socket.socket):
         self.listen()
 
         self.__request_callback = request_callback
+        self.__rework_callback = rework_callback
         self.__add_sub_callback = add_sub_callback
         self.__del_sub_callback = del_sub_callback
 
@@ -67,10 +70,20 @@ class ClientHandler(socket.socket):
         """
         while True:
             sock, address = self.accept()
-            print("NEW CLIENT:", address)
 
             self.__clients.append(ServerConnection(sock,
                                                    request_callback=self.__request_callback,
+                                                   rework_callback=self.__rework_callback,
                                                    add_sub_callback=self.__add_sub_callback,
                                                    del_sub_callback=self.__del_sub_callback))
             sleep(0.1)
+
+    def provide_data(self, req_dict: DATAUNIT, value: DATAUNIT) -> None:
+        """
+        Provide data for subscription to all clients
+        :param req_dict: Same dictonary as a normal request to use
+        :param value: New value
+        """
+        for client in self.__clients:
+            client.provide_data(req_dict, value)
+

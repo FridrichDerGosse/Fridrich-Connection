@@ -31,8 +31,6 @@ class CommunicationTest(unittest.TestCase):
         """
         Setup client and server
         """
-        self.__client = ClientConnection("127.0.0.1", 4205, lambda a: a)
-        # self.__server = ClientHandler(lambda a: a)
 
     def tearDown(self) -> None:
         """

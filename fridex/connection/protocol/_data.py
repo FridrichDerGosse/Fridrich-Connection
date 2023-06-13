@@ -30,7 +30,10 @@ class DataProtocol(Protocol):
     __cache: Cache | None
 
     REQUEST_CALLBACK_TYPE = Callable[[DATAUNIT], DATAUNIT]
+    REWORK_CALLBACK_TYPE = Callable[[DATAUNIT], DATAUNIT]
+
     __request_callback: REQUEST_CALLBACK_TYPE
+    __rework_callback: REWORK_CALLBACK_TYPE
 
     __send_futures: dict[int, Future]
 
@@ -38,16 +41,19 @@ class DataProtocol(Protocol):
             self,
             id_range: range,
             request_callback: REQUEST_CALLBACK_TYPE,
+            rework_callback: REWORK_CALLBACK_TYPE,
             cache: Cache | None = None
     ) -> None:
         """
         Create data protocol
         :param id_range: ID range to use for this subprotocol
         :param request_callback: Callback to get information for requests
+        :param rework_callback: Callback to rework result before setting to future
         :param cache: Optional cache
         """
         super().__init__("data", id_range)
         self.__request_callback = request_callback
+        self.__rework_callback = rework_callback
         self.__cache = cache
 
         self.__send_futures = {}
@@ -77,7 +83,8 @@ class DataProtocol(Protocol):
         :param message: Response message
         """
         for submessage in message["data"]:
-            self.__send_futures[submessage["id"]].set_result(loads(submessage["data"]))
+            value: DATAUNIT = self.__rework_callback(loads(submessage["data"]))
+            self.__send_futures[submessage["id"]].set_result(value)
             self.__send_futures.pop(submessage["id"])
 
     def process_request(self, message: BulkDict) -> str:

@@ -30,17 +30,19 @@ class ClientConnection(BaseConnection):
             ip: str,
             port: int,
             request_callback: ProtocolInterface.REQUEST_CALLBACK_TYPE,
+            rework_callback: ProtocolInterface.REWORK_CALLBACK_TYPE
     ) -> None:
         """
         Connect to server
         :param ip: IP of the server
         :param port: Port to connect
         :param request_callback: Callback to get information for data requests
+        :param rework_callback: Callback to rework result before setting to future
         """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((ip, port))
 
-        super().__init__(conn=sock, request_callback=request_callback)
+        super().__init__(conn=sock, request_callback=request_callback, rework_callback=rework_callback)
 
         self._state = "open"
         self.send_key_exchange()

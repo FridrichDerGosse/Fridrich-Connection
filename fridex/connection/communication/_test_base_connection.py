@@ -76,8 +76,8 @@ class BaseConnectionTest(unittest.TestCase):
         """
         self.server, self.client_handler, self.client = get_socket_pair()
 
-        self.conn_server = BaseConnectionModified(self.client_handler, request_callback=lambda a: a, timeout=1)
-        self.conn_client = BaseConnectionModified(self.client, request_callback=lambda a: a, timeout=1)
+        self.conn_server = BaseConnectionModified(self.client_handler, lambda a: a, lambda a: a, timeout=1)
+        self.conn_client = BaseConnectionModified(self.client, lambda a: a, lambda a: a, timeout=1)
         self.conn_server.set_state("open")
         self.conn_client.set_state("open")
 
@@ -97,17 +97,17 @@ class BaseConnectionTest(unittest.TestCase):
         """
         Test basic unencrypted data traffic
         """
-        f_client: list[tuple[Future, int]] = []
-        f_server: list[tuple[Future, int]] = []
+        f_client: list[tuple[Future, str]] = []
+        f_server: list[tuple[Future, str]] = []
 
-        for i in range(10):
+        for i in range(10):  # noqa
             self.conn_client.protocol.data.request_start()
-            f_client.append((self.conn_client.protocol.data.request_add(dumps({"test": i})), i))
+            f_client.append((self.conn_client.protocol.data.request_add(dumps({"test": str(i)*1000})), str(i)*1000))
             self.conn_client.send(self.conn_client.protocol.data.request_get())
 
-        for i in range(10):
+        for i in range(10):  # noqa
             self.conn_server.protocol.data.request_start()
-            f_server.append((self.conn_server.protocol.data.request_add(dumps({"test": i})), i))
+            f_server.append((self.conn_server.protocol.data.request_add(dumps({"test": str(i)*1000})), str(i)*1000))
             self.conn_server.send(self.conn_server.protocol.data.request_get())
 
         for f, num in f_client + f_server:
@@ -121,6 +121,8 @@ class BaseConnectionTest(unittest.TestCase):
         """
         self.conn_client.send_key_exchange()
         self.conn_client.send_key_exchange()
+
+        self.test_unencrypted_data()
 
         self.hold_connection()
 

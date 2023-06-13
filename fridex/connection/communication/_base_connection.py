@@ -17,8 +17,8 @@ from time import sleep, time
 import socket
 import select
 
-from ..protocol import BulkDict, ProtocolInterface, Protocol
 from ..encryption import CryptionService, CryptionMethod, CRYPTION_METHODS
+from ..protocol import BulkDict, ProtocolInterface, Protocol
 from ..protocol import CommunicationProtocol
 
 
@@ -53,6 +53,7 @@ class BaseConnection:
             self,
             conn: socket.socket,
             request_callback: ProtocolInterface.REQUEST_CALLBACK_TYPE,
+            rework_callback: ProtocolInterface.REWORK_CALLBACK_TYPE,
             add_sub_callback: ProtocolInterface.ADD_RELATED_SUB_CALLBACK_TYPE | None = None,
             del_sub_callback: ProtocolInterface.DELETE_RELATED_SUB_CALLBACK_TYPE | None = None,
             timeout: int = 10,
@@ -62,6 +63,7 @@ class BaseConnection:
         Create connection
         :param conn: Socket
         :param request_callback: Callback to get information for data requests
+        :param rework_callback: Callback to rework result before setting to future
         :param add_sub_callback: Callback when an add subscription request comes in
         :param del_sub_callback: Callback when a delete subscription request comes in
         :param timeout: Connection leasetime if no response on ping
@@ -91,6 +93,7 @@ class BaseConnection:
 
         self._protocol = ProtocolInterface(
             data_callback=request_callback,
+            rework_callback=rework_callback,
             new_key_callback=self._cryption.new_key,
             set_key_callback=self._cryption.set_key,
             control_callback=self.__confirm_control,
@@ -103,7 +106,7 @@ class BaseConnection:
             thread_pool=self._thread_pool,
             add_related_sub_callback=add_sub_callback,
             delete_related_sub_callback=del_sub_callback,
-            sub_send_callback=self.send
+            send_sub_callback=self.send
         )
 
         self._thread_pool.submit(self.__loop)
@@ -160,7 +163,6 @@ class BaseConnection:
 
                 # Close connection if leased
                 if datetime.now() > self.__lease_time + timedelta(seconds=2):
-                    print("CLOSE")
                     self.__socket.close()
                     return
 
@@ -208,7 +210,6 @@ class BaseConnection:
 
             # Sending
             for send in to_send:
-                print("SEND", send)
                 size_send: bytes = len(send).to_bytes(length=Protocol.max_bytes, byteorder="big")
                 self.__socket.send(self._cryption.encrypt(size_send + send.encode("UTF-8")))
 
@@ -234,7 +235,6 @@ class BaseConnection:
             recv_messages: list[BulkDict] = []
 
             while message_buffer != b'':
-                print("WORKING", message_buffer)
                 size_recv: int = int.from_bytes(bytes=message_buffer[:Protocol.max_bytes], byteorder="big")
 
                 message_bytes = message_buffer[Protocol.max_bytes:Protocol.max_bytes + size_recv]
@@ -314,7 +314,6 @@ class BaseConnection:
         Set current state and go through callbacks
         :param value: Value to set to
         """
-        print("SET", value)
         self.__state = value
 
         for cb_id, (state, callback) in self.__state_callbacks.items():
