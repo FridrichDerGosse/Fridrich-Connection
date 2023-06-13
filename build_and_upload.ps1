@@ -1,8 +1,8 @@
-:: ensure the newest versions of twine and build are is installed
+# ensure the newest versions of twine and build are is installed
 python -m pip install twine build --upgrade
 
-:: create package
+# create package
 python -m build
 
-:: upload
+# upload
 python -m twine upload --skip-existing --config-file config.pypirc dist/*

@@ -23,7 +23,7 @@ here = Path(__file__).parent.resolve()
 long_description = (here / "README.md").read_text(encoding="utf-8")
 
 setup(
-    name="deamons-connection",
+    name="fridex-connection",
     version="0.0.0",
     description="Basic fridrich functions (connection, encryption , ...)",
     long_description=long_description,
@@ -38,6 +38,6 @@ setup(
     ],
     keyword="dashboard, voting, connection",
     packages=find_packages(),
-    namespace_packages=['deamons'],
+    namespace_packages=['fridex'],
     python_requires=">=3.11"
 )
